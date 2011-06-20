@@ -3,6 +3,7 @@
 import sys
 import os
 import datetime
+import time
 from tkinter import *
 from tkinter import filedialog
 
@@ -18,8 +19,15 @@ class TimeBrowser(PanedWindow):
         self.pack(fill=BOTH, expand=1)
         # self.grid(sticky=N+S+E+W)
         self.createWidgets()
-        self.poll()
 
+        self.setupPanels()
+
+    def setupPanels(self):
+        self.updateTheWalk()
+        self.refreshDatesList(do_update=True)
+        self.refreshFileNamesList(do_update=True)
+        self.poll()
+        
     def poll(self):
         now = self.lst_dates.curselection()
         if now != self.selected_dates:
@@ -28,8 +36,60 @@ class TimeBrowser(PanedWindow):
         self.after(250, self.poll)
 
     def list_has_changed(self, selection):
-        self.updateFilenameList()
+        self.refreshFileNamesList()
 
+
+    def updateTheWalk(self):
+        self.the_walk = []
+        for (dirpath, dirnames, filenames) in os.walk(self.root_path):
+            for f in filenames:
+                fullpath = os.path.join(dirpath, f)
+                self.the_walk.append({'fullpath': fullpath,
+                                      'mtime': datetime.date.fromtimestamp(os.path.getmtime(fullpath)),
+                                      'ctime': datetime.date.fromtimestamp(os.path.getctime(fullpath))
+                                      })
+
+    def updateTheDates(self):
+        self.alldates = {}
+        for w in self.the_walk:
+            self.alldates.setdefault(w['mtime'], 0)
+            self.alldates[w['mtime']] += 1
+
+        # sort the dates by...date:
+        self.alldates = [(d, self.alldates[d]) for d in sorted(self.alldates.keys())]
+
+    def updateTheFileNames(self):
+        self.allfiles = []
+        for w in self.the_walk:
+            self.allfiles. append(
+                (w['mtime'], w['fullpath'].replace(self.root_path+'/', '') )
+                )
+
+        # sort the files by date:
+        self.allfiles = sorted(self.allfiles, key=lambda x: x[0])
+
+    def refreshDatesList(self, do_update=False):
+        if do_update: self.updateTheDates()
+        self.lst_dates.delete(0, END)
+
+        for d in self.alldates:
+            self.lst_dates.insert(END, '%s (%d)' % (d[0].isoformat(), d[1]) )
+
+    def refreshFileNamesList(self, do_update=False):
+        if do_update: self.updateTheFileNames()
+        self.lst_files.delete(0, END)
+
+        the_selected_dates = [self.alldates[int(i)][0] for i in self.lst_dates.curselection()]
+
+        for f in self.allfiles:
+            if len(the_selected_dates) > 0:
+                if f[0] in the_selected_dates:
+                    self.lst_files.insert(END, f[1])
+            else:
+                self.lst_files.insert(END, f[1])
+
+    def run(self):
+        self.mainloop()
 
     def createWidgets(self):
         # top = self.winfo_toplevel()
@@ -78,53 +138,12 @@ class TimeBrowser(PanedWindow):
         self.sbh2.config(command=self.lst_files.xview)
         self.sbv2.config(command=self.lst_files.yview)
 
-        self.initDatesList()
-        self.updateFilenameList()
-
         self.add(self.f1)
         self.add(self.f2)
 
         # self.l1.grid(row=0, column=0, sticky=N+S+E+W)
         # self.l2.grid(row=0, column=1, sticky=N+S+E+W)
 
-    def initDatesList(self):
-        self.alldates = {}
-        for (dirpath, dirnames, filenames) in os.walk(self.root_path):
-            for f in filenames:
-                fullpath = os.path.join(dirpath, f)
-                d = datetime.date.fromtimestamp(os.path.getmtime(fullpath))
-                self.alldates.setdefault(d, 0)
-                self.alldates[d] += 1
-
-        # sort the dates by...date:
-        self.alldates = [(d, self.alldates[d]) for d in sorted(self.alldates.keys())]
-        for d in self.alldates:
-            self.lst_dates.insert(END, '%s (%d)' % (d[0].isoformat(), d[1]) )
-
-    def updateFilenameList(self):
-        the_selected_dates = [self.alldates[int(i)][0] for i in self.lst_dates.curselection()]
-        self.allfiles = []
-        for (dirpath, dirnames, filenames) in os.walk(self.root_path):
-            for f in filenames:
-                fullpath = os.path.join(dirpath, f)
-                d = datetime.date.fromtimestamp(os.path.getmtime(fullpath))
-                self.allfiles.append(
-                    (d, fullpath.replace(self.root_path+'/', ''))
-                    )
-
-        # sort the files by date:
-        self.allfiles = sorted(self.allfiles, key=lambda x: x[0])
-
-        self.lst_files.delete(0, END)
-        for f in self.allfiles:
-            if len(the_selected_dates) > 0:
-                if f[0] in the_selected_dates:
-                    self.lst_files.insert(END, f[1])
-            else:
-                self.lst_files.insert(END, f[1])
-
-    def run(self):
-        self.mainloop()
 
 
 if __name__ == '__main__':
